@@ -12,16 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:GO_VERSION
+FROM s390x/golang:GO_VERSION
 
 # Install dep as root
 ENV DEP_VERSION=v0.5.0
-RUN curl -sSL -o /usr/local/bin/dep https://github.com/golang/dep/releases/download/$DEP_VERSION/dep-linux-amd64 && \
-    chmod +x /usr/local/bin/dep
+RUN go get -u -v github.com/golang/dep/cmd/dep && \
+    ln -s /go/bin/dep /usr/local/bin/dep
 
 # Install etcd
-RUN curl -sSL https://github.com/coreos/etcd/releases/download/v3.2.24/etcd-v3.2.24-linux-amd64.tar.gz \
-    | tar -vxz -C /usr/local/bin --strip=1 etcd-v3.2.24-linux-amd64/etcd
+ENV ETCD_DATA_DIR=/data ETCD_UNSUPPORTED_ARCH=s390x
+RUN mkdir -p /src/github.com/coreos && \
+    cd /src/github.com/coreos && \
+    rm -rf etcd && \
+    git clone https://github.com/coreos/etcd && \
+    cd etcd && \
+    git checkout v3.2.24 && \
+    mkdir -p /data && \
+    ./build && \
+    cd bin && cp -rf etcd etcdctl /usr/bin/
 
 # Install the golint, use this to check our source for niceness
 COPY vendor/golang.org /go/src/golang.org
@@ -33,7 +41,11 @@ ENV PATH=$PATH:/vlinker/bin
 
 # Install the azure client, used to publish svcat binaries
 ENV AZCLI_VERSION=v0.3.1
-RUN curl -sLo /usr/local/bin/az https://github.com/carolynvs/az-cli/releases/download/$AZCLI_VERSION/az-linux-amd64 && \
+RUN go get github.com/carolynvs/az-cli && \
+    cd $GOPATH/src/github.com/carolynvs/az-cli/ && \
+    git checkout $AZCLI_VERSION && \
+    make build && \
+    cp ./bin/az /usr/local/bin/az && \
     chmod +x /usr/local/bin/az
 
 # Create the full dir tree that we'll mount our src into when we run the image
